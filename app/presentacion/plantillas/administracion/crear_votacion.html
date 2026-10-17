@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block titulo %}Crear Nueva Votación · Panel Administrativo{% endblock %}
+
+{% block contenido %}
+<div class="max-w-2xl mx-auto space-y-6">
+
+    <div class="flex items-center justify-between">
+        <a href="{{ url_for('administracion.panel') }}"
+           class="text-sm font-medium text-slate-600 hover:text-indigo-600 transition">
+            ← Volver al panel administrativo
+        </a>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
+        <div class="space-y-1.5 border-b border-slate-100 pb-4">
+            <span class="inline-block bg-amber-100 text-amber-800 text-xs font-bold px-2.5 py-1 rounded-md uppercase tracking-wide">
+                Estado inicial: Borrador
+            </span>
+            <h1 class="text-2xl font-extrabold text-slate-900">Crear Nueva Votación</h1>
+            <p class="text-xs text-slate-500">
+                El servidor generará automáticamente un UUID único y registrará las opciones con puntuación inicial
+                <code>0</code> en el Sorted Set de Redis.
+            </p>
+        </div>
+
+        <form id="formulario-crear-votacion"
+              action="{{ url_for('administracion.crear_votacion') }}"
+              method="POST"
+              class="space-y-6"
+              novalidate>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <!-- Pregunta de la votación -->
+            <div>
+                <label for="pregunta" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Pregunta de la votación
+                </label>
+                <input type="text"
+                       id="pregunta"
+                       name="pregunta"
+                       value="{{ pregunta_previa }}"
+                       required
+                       minlength="5"
+                       maxlength="250"
+                       placeholder="Ej. ¿Qué motor o estructura clave-valor prefieres para caché y mensajería?"
+                       class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/20 outline-none transition">
+                <p class="text-[11px] text-slate-500 mt-1">
+                    Entre 5 y 250 caracteres.
+                </p>
+            </div>
+
+            <!-- Opciones de respuesta (entre 2 y 10) -->
+            <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        Opciones de respuesta (mínimo 2, máximo 10)
+                    </label>
+                    <span id="contador-opciones" class="text-xs font-semibold text-indigo-600">
+                        {{ opciones_previas|length }} / 10 opciones
+                    </span>
+                </div>
+
+                <div id="lista-opciones-crear" class="space-y-2.5">
+                    {% for opcion in opciones_previas %}
+                        <div class="fila-opcion flex items-center gap-2">
+                            <span class="etiqueta-indice-opcion w-8 text-xs font-mono font-bold text-slate-500 text-center">
+                                #{{ loop.index }}
+                            </span>
+                            <input type="text"
+                                   name="opciones"
+                                   value="{{ opcion }}"
+                                   maxlength="120"
+                                   placeholder="Escribe el texto de la opción {{ loop.index }}"
+                                   class="flex-1 rounded-xl border border-slate-300 px-3.5 py-2 text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/20 outline-none transition">
+                            <button type="button"
+                                    class="boton-eliminar-opcion text-xs font-semibold text-slate-400 hover:text-red-600 px-2.5 py-2 rounded-lg hover:bg-red-50 transition"
+                                    title="Eliminar esta opción">
+                                Quitar
+                            </button>
+                        </div>
+                    {% endfor %}
+                </div>
+
+                <div class="pt-1">
+                    <button type="button"
+                            id="boton-agregar-opcion"
+                            class="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-500 bg-indigo-50 hover:bg-indigo-100 px-3.5 py-2 rounded-xl transition">
+                        + Añadir otra opción
+                    </button>
+                </div>
+            </div>
+
+            <!-- Opción de apertura inmediata en tiempo real -->
+            <div class="bg-emerald-50/70 border border-emerald-200 rounded-xl p-4">
+                <label for="abrir_al_crear" class="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox"
+                           id="abrir_al_crear"
+                           name="abrir_al_crear"
+                           value="si"
+                           checked
+                           class="mt-0.5 h-4 w-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500">
+                    <span class="text-xs text-slate-700 leading-relaxed">
+                        <strong class="text-slate-900 block">Abrir la votación inmediatamente al guardarla</strong>
+                        Publica un evento en Redis Pub/Sub para que aparezca en tiempo real en las pestañas públicas abiertas.
+                        (Desmarca esta casilla si prefieres conservarla en estado <code>borrador</code> y abrirla después desde el panel).
+                    </span>
+                </label>
+            </div>
+
+            <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+                <a href="{{ url_for('administracion.panel') }}"
+                   class="text-sm font-medium text-slate-600 hover:text-slate-900 px-4 py-2.5 rounded-xl transition">
+                    Cancelar
+                </a>
+                <button type="submit"
+                        class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm px-6 py-2.5 rounded-xl shadow-sm transition">
+                    Guardar votación
+                </button>
+            </div>
+        </form>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/administracion.js') }}"></script>
+{% endblock %}

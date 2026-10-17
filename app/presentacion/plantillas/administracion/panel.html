@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block titulo %}Panel Administrativo · VotaRedis{% endblock %}
+
+{% block contenido %}
+<div id="aplicacion-panel-admin"
+     data-url-panel-api="{{ url_for('administracion.api_panel_votaciones') }}"
+     data-url-eventos="{{ url_for('publicas.api_eventos_listado_votaciones') }}"
+     class="space-y-8">
+
+    <!-- Cabecera del panel administrativo -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
+        <div>
+            <span class="inline-flex items-center gap-1.5 bg-indigo-50 text-indigo-700 text-xs font-bold px-2.5 py-1 rounded-md uppercase tracking-wide">
+                Gestión de Votaciones
+            </span>
+            <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-1">
+                Panel de Administración
+            </h1>
+            <p class="text-sm text-slate-600 mt-0.5">
+                Administra el ciclo de vida de las votaciones (<code class="font-mono text-xs">borrador → abierta → cerrada</code>) o participa desde la vista pública.
+            </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3">
+            <!-- Indicador SSE en tiempo real para el panel administrativo -->
+            <div id="indicador-sse-panel"
+                 class="inline-flex items-center gap-2 bg-slate-100 border border-slate-300 text-slate-700 text-xs font-medium px-3.5 py-1.5 rounded-full">
+                <span id="punto-sse-panel" class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+                <span id="texto-sse-panel">Conectando panel en vivo…</span>
+            </div>
+
+            <a href="{{ url_for('administracion.nueva_votacion') }}"
+               class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm px-4 py-2.5 rounded-xl shadow-sm transition">
+                + Crear nueva votación
+            </a>
+        </div>
+    </div>
+
+    <!-- Tarjetas de resumen del estado en Redis -->
+    <div class="grid grid-cols-2 sm:grid-cols-5 gap-4">
+        <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+            <span class="text-xs font-medium text-slate-500 block">Total Votaciones</span>
+            <span id="resumen-total" class="text-2xl font-extrabold text-slate-900 mt-1 block">{{ resumen.total }}</span>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+            <span class="text-xs font-medium text-amber-600 block">En Borrador</span>
+            <span id="resumen-borrador" class="text-2xl font-extrabold text-amber-600 mt-1 block">{{ resumen.borrador }}</span>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+            <span class="text-xs font-medium text-emerald-600 block">Abiertas</span>
+            <span id="resumen-abiertas" class="text-2xl font-extrabold text-emerald-600 mt-1 block">{{ resumen.abiertas }}</span>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+            <span class="text-xs font-medium text-slate-600 block">Cerradas</span>
+            <span id="resumen-cerradas" class="text-2xl font-extrabold text-slate-700 mt-1 block">{{ resumen.cerradas }}</span>
+        </div>
+        <div id="tarjeta-resumen-votos" class="bg-slate-900 text-white rounded-xl p-4 shadow-sm col-span-2 sm:col-span-1 transition">
+            <span class="text-xs font-medium text-slate-400 block">Votos Emitidos</span>
+            <span id="resumen-votos-totales" class="text-2xl font-extrabold text-emerald-400 mt-1 block">{{ resumen.votos_totales }}</span>
+        </div>
+    </div>
+
+    <!-- Listado de votaciones registradas -->
+    <section class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 bg-slate-50/60">
+            <h2 class="text-base font-bold text-slate-900">
+                Votaciones Registradas en <code class="font-mono text-indigo-600 text-xs">{{ prefijo_redis }}:votaciones:indice</code>
+            </h2>
+            <span class="text-xs text-slate-500">Contadores sincronizados en tiempo real vía Redis Pub/Sub + SSE</span>
+        </div>
+
+        {% if votaciones %}
+            <div id="lista-votaciones-panel" class="divide-y divide-slate-200">
+                {% for votacion in votaciones %}
+                    <div class="fila-votacion-panel p-6 hover:bg-slate-50/50 transition space-y-4"
+                         data-id-votacion="{{ votacion.id }}"
+                         data-estado="{{ votacion.estado }}">
+                        <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+
+                            <!-- Información principal de la votación -->
+                            <div class="space-y-2 max-w-3xl">
+                                <div class="flex flex-wrap items-center gap-2.5">
+                                    {% if votacion.estado == 'borrador' %}
+                                        <span class="insignia-borrador inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 text-xs font-bold px-2.5 py-0.5 rounded-full uppercase">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
+                                            Borrador
+                                        </span>
+                                    {% elif votacion.estado == 'abierta' %}
+                                        <span class="insignia-abierta inline-flex items-center gap-1.5 bg-emerald-100 text-emerald-800 text-xs font-bold px-2.5 py-0.5 rounded-full uppercase">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                                            Abierta
+                                        </span>
+                                    {% else %}
+                                        <span class="insignia-cerrada inline-flex items-center gap-1.5 bg-slate-200 text-slate-700 text-xs font-bold px-2.5 py-0.5 rounded-full uppercase">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
+                                            Cerrada
+                                        </span>
+                                    {% endif %}
+
+                                    <span class="text-xs font-mono text-slate-400">ID: {{ votacion.id }}</span>
+                                    <span class="insignia-ya-voto-admin bg-indigo-50 text-indigo-700 border border-indigo-200 text-[11px] font-semibold px-2 py-0.5 rounded {% if not votacion.participacion.ya_voto %}hidden{% endif %}">
+                                        ✓ Ya votaste en esta votación
+                                    </span>
+                                </div>
+
+                                <h3 class="text-lg font-bold text-slate-900">
+                                    {{ votacion.pregunta }}
+                                </h3>
+
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-slate-500 pt-1">
+                                    <div>
+                                        <span class="text-slate-400">Creación:</span>
+                                        <strong class="text-slate-700 block">{{ votacion.fecha_creacion|formatear_fecha }}</strong>
+                                    </div>
+                                    <div>
+                                        <span class="text-slate-400">Apertura:</span>
+                                        <strong class="fecha-apertura-fila text-slate-700 block">{{ votacion.fecha_apertura|formatear_fecha }}</strong>
+                                    </div>
+                                    <div>
+                                        <span class="text-slate-400">Cierre:</span>
+                                        <strong class="fecha-cierre-fila text-slate-700 block">{{ votacion.fecha_cierre|formatear_fecha }}</strong>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Métricas y acciones según el estado -->
+                            <div class="flex flex-col sm:flex-row lg:flex-col items-start sm:items-center lg:items-end justify-between gap-3">
+                                <div class="caja-votos-fila bg-slate-100 rounded-xl px-3.5 py-2 text-right transition">
+                                    <span class="text-[11px] text-slate-500 uppercase font-semibold block">Total Votos</span>
+                                    <span class="contador-votos-votacion text-xl font-extrabold text-slate-900">{{ votacion.total_votos }}</span>
+                                    <span class="text-[11px] text-slate-500 block">{{ votacion.total_opciones }} opciones</span>
+                                </div>
+
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <!-- Enlaces de participación pública y resultados (en la misma pestaña para compartir el encabezado) -->
+                                    {% if votacion.estado == 'abierta' %}
+                                        <a href="{{ url_for('publicas.detalle_votacion', id_votacion=votacion.id) }}"
+                                           class="text-xs font-semibold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 py-2 rounded-lg transition">
+                                            Ir a página pública (Votar)
+                                        </a>
+                                    {% endif %}
+
+                                    <a href="{{ url_for('publicas.resultados_votacion', id_votacion=votacion.id) }}"
+                                       class="text-xs font-semibold bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-3 py-2 rounded-lg transition">
+                                        Ver estadísticas y resultados
+                                    </a>
+
+                                    <!-- Acciones de estado protegidas con POST y CSRF -->
+                                    {% if votacion.estado == 'borrador' %}
+                                        <form action="{{ url_for('administracion.abrir_votacion', id_votacion=votacion.id) }}"
+                                              method="POST"
+                                              class="inline">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit"
+                                                    class="text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-lg shadow-sm transition">
+                                                Abrir votación
+                                            </button>
+                                        </form>
+                                    {% elif votacion.estado == 'abierta' %}
+                                        <form action="{{ url_for('administracion.cerrar_votacion', id_votacion=votacion.id) }}"
+                                              method="POST"
+                                              class="inline form-confirmar-accion"
+                                              data-mensaje="¿Deseas cerrar definitivamente esta votación? Una vez cerrada no admitirá más votos ni podrá reabrirse.">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit"
+                                                    class="text-xs font-bold bg-red-600 hover:bg-red-500 text-white px-3.5 py-2 rounded-lg shadow-sm transition">
+                                                Cerrar votación
+                                            </button>
+                                        </form>
+                                    {% else %}
+                                        <span class="text-xs font-medium text-slate-400 bg-slate-100 px-3 py-2 rounded-lg">
+                                            Cerrada (No reabrible)
+                                        </span>
+                                    {% endif %}
+
+                                    <form action="{{ url_for('administracion.reiniciar_votacion', id_votacion=votacion.id) }}"
+                                          method="POST"
+                                          class="inline form-confirmar-accion form-reiniciar-votacion {% if votacion.total_votos == 0 %}hidden{% endif %}"
+                                          data-mensaje="¿Reiniciar a cero únicamente los votos y votantes de esta votación para demostración?">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit"
+                                                class="text-xs font-medium text-amber-700 hover:bg-amber-50 border border-amber-300 px-2.5 py-2 rounded-lg transition">
+                                            Reiniciar conteo
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="p-10 text-center space-y-3">
+                <p class="text-slate-700 font-semibold">Todavía no has creado ninguna votación.</p>
+                <p class="text-xs text-slate-500 max-w-md mx-auto">
+                    Crea una nueva votación para inicializar su Hash de datos, su Hash de opciones y su Sorted Set de resultados en Redis.
+                </p>
+                <div class="pt-2">
+                    <a href="{{ url_for('administracion.nueva_votacion') }}"
+                       class="inline-block bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm px-5 py-2.5 rounded-xl shadow-sm transition">
+                        Crear primera votación
+                    </a>
+                </div>
+            </div>
+        {% endif %}
+    </section>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/administracion.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block titulo %}Iniciar Sesión · Administración VotaRedis{% endblock %}
+
+{% block contenido %}
+<div class="max-w-md mx-auto">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
+        <div class="space-y-1.5 border-b border-slate-100 pb-4">
+            <span class="inline-block bg-slate-100 text-slate-700 text-xs font-bold px-2.5 py-1 rounded-md uppercase tracking-wide">
+                Panel Protegido
+            </span>
+            <h1 class="text-2xl font-extrabold text-slate-900">Iniciar Sesión Administrativa</h1>
+            <p class="text-xs text-slate-500">
+                Accede para crear, abrir o cerrar votaciones. Recuerda que los votantes públicos no necesitan registrarse.
+            </p>
+        </div>
+
+        <form action="{{ url_for('autenticacion.ingresar') }}" method="POST" class="space-y-4" novalidate>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div>
+                <label for="nombre_usuario" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Nombre de usuario
+                </label>
+                <input type="text"
+                       id="nombre_usuario"
+                       name="nombre_usuario"
+                       value="{{ valores_previos.get('nombre_usuario', '') }}"
+                       required
+                       autocomplete="username"
+                       placeholder="Tu nombre de usuario"
+                       class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/20 outline-none transition">
+            </div>
+
+            <div>
+                <label for="contrasena" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Contraseña
+                </label>
+                <input type="password"
+                       id="contrasena"
+                       name="contrasena"
+                       required
+                       autocomplete="current-password"
+                       placeholder="Tu contraseña"
+                       class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/20 outline-none transition">
+            </div>
+
+            <div class="pt-2">
+                <button type="submit"
+                        class="w-full bg-slate-900 hover:bg-indigo-600 text-white font-bold py-2.5 px-4 rounded-xl text-sm shadow-sm transition">
+                    Entrar al panel administrativo
+                </button>
+            </div>
+        </form>
+
+        <div class="pt-4 border-t border-slate-100 text-center text-xs text-slate-600">
+            ¿Aún no tienes cuenta de administrador?
+            <a href="{{ url_for('autenticacion.registro') }}" class="text-indigo-600 font-semibold hover:underline ml-1">
+                Regístrate con tu código de invitación
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

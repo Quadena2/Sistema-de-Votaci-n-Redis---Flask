@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+
+{% block titulo %}
+    {% if vista_listado %}Votaciones Públicas · VotaRedis{% else %}Inicio · Sistema de Votaciones en Tiempo Real con Redis{% endif %}
+{% endblock %}
+
+{% block contenido %}
+<div id="aplicacion-listado-votaciones"
+     data-url-listado="{{ url_for('publicas.api_listar_votaciones') }}"
+     data-url-eventos="{{ url_for('publicas.api_eventos_listado_votaciones') }}"
+     class="space-y-10">
+
+    {% if not vista_listado %}
+    <!-- Encabezado principal / Portada -->
+    <section class="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 rounded-2xl p-6 sm:p-10 text-white shadow-lg border border-slate-700/70">
+        <div class="max-w-3xl space-y-4">
+            <div class="inline-flex items-center gap-2 bg-red-500/20 border border-red-400/30 text-red-200 text-xs font-semibold px-3 py-1 rounded-full">
+                <span class="w-2 h-2 rounded-full bg-red-400 animate-pulse"></span>
+                Demostración Académica · Redis Open Source en Tiempo Real
+            </div>
+            <h1 class="text-2xl sm:text-4xl font-extrabold tracking-tight leading-tight">
+                Votaciones Interactivas con Atomicidad en Lua, Pub/Sub y Server-Sent Events
+            </h1>
+            <p class="text-slate-300 text-sm sm:text-base leading-relaxed">
+                Participa sin necesidad de registro o administra tus propias votaciones. Cada voto se valida y contabiliza
+                atómicamente en <strong>Redis</strong> mediante scripts Lua, combinando control de duplicados por sesión
+                firmada (<code class="text-indigo-300">sesion:&lt;id&gt;</code>) y por cuenta administrativa
+                (<code class="text-emerald-300">administrador:&lt;id&gt;</code>).
+            </p>
+            <div class="pt-2 flex flex-wrap gap-3">
+                <a href="#votaciones-abiertas"
+                   class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-5 py-2.5 rounded-lg shadow transition text-sm">
+                    Explorar votaciones abiertas (<span id="contador-hero-abiertas">{{ votaciones_abiertas|length }}</span>)
+                </a>
+                {% if admin_actual %}
+                    <a href="{{ url_for('administracion.nueva_votacion') }}"
+                       class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-medium px-5 py-2.5 rounded-lg transition text-sm">
+                        + Crear nueva votación
+                    </a>
+                {% else %}
+                    <a href="{{ url_for('autenticacion.ingresar') }}"
+                       class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-medium px-5 py-2.5 rounded-lg transition text-sm">
+                        Acceso administrativo
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+    {% else %}
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
+        <div>
+            <h1 class="text-2xl sm:text-3xl font-bold text-slate-900">Listado Público de Votaciones</h1>
+            <p class="text-sm text-slate-600 mt-1">
+                Selecciona cualquier votación abierta para emitir tu voto o consulta los resultados en tiempo real.
+            </p>
+        </div>
+        {% if admin_actual %}
+            <a href="{{ url_for('administracion.panel') }}"
+               class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm transition">
+                Ir al Panel Administrativo
+            </a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Sección de Votaciones Abiertas -->
+    <section id="votaciones-abiertas" class="space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5">
+                <span class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
+                <h2 class="text-xl font-bold text-slate-900">Votaciones Abiertas</h2>
+                <span id="contador-votaciones-abiertas"
+                      class="bg-emerald-100 text-emerald-800 text-xs font-bold px-2.5 py-0.5 rounded-full">
+                    {{ votaciones_abiertas|length }}
+                </span>
+            </div>
+
+            <!-- Indicador de sincronización SSE en tiempo real para el listado -->
+            <div id="indicador-sse-listado"
+                 class="inline-flex items-center gap-2 bg-slate-100 border border-slate-300 text-slate-700 text-xs font-medium px-3 py-1 rounded-full">
+                <span id="punto-sse-listado" class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+                <span id="texto-sse-listado">Conectando actualizaciones en vivo…</span>
+            </div>
+        </div>
+
+        <div id="contenedor-votaciones-abiertas">
+            {% if votaciones_abiertas %}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {% for votacion in votaciones_abiertas %}
+                        <article class="tarjeta-votacion bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition p-6 flex flex-col justify-between">
+                            <div class="space-y-3">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="insignia-abierta inline-flex items-center gap-1.5 bg-emerald-100 text-emerald-800 text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wide">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                                        Abierta
+                                    </span>
+                                    {% if votacion.participacion.ya_voto %}
+                                        <span class="bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                                            ✓ Ya participaste
+                                        </span>
+                                    {% else %}
+                                        <span class="bg-slate-100 text-slate-700 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                                            Disponible para votar
+                                        </span>
+                                    {% endif %}
+                                </div>
+
+                                <h3 class="text-lg font-bold text-slate-900 leading-snug">
+                                    <a href="{{ url_for('publicas.detalle_votacion', id_votacion=votacion.id) }}"
+                                       class="hover:text-indigo-600 transition">
+                                        {{ votacion.pregunta }}
+                                    </a>
+                                </h3>
+
+                                <div class="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-1">
+                                    <span>Opciones: <strong class="text-slate-700">{{ votacion.total_opciones }}</strong></span>
+                                    <span>Total de votos: <strong class="text-slate-700">{{ votacion.total_votos }}</strong></span>
+                                    <span>Abierta: <strong class="text-slate-700">{{ votacion.fecha_apertura|formatear_fecha }}</strong></span>
+                                </div>
+                            </div>
+
+                            <div class="mt-6 pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                                <a href="{{ url_for('publicas.detalle_votacion', id_votacion=votacion.id) }}"
+                                   class="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition shadow-sm">
+                                    {% if votacion.participacion.ya_voto %}Ver detalle y resultados{% else %}Participar y votar{% endif %}
+                                </a>
+                                <a href="{{ url_for('publicas.resultados_votacion', id_votacion=votacion.id) }}"
+                                   class="text-sm font-medium text-slate-600 hover:text-indigo-600 px-3 py-2 rounded-lg hover:bg-slate-50 transition">
+                                    Pantalla de resultados en vivo →
+                                </a>
+                            </div>
+                        </article>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="bg-white rounded-xl border border-slate-200 p-8 text-center space-y-3">
+                    <p class="text-slate-600 font-medium">No hay votaciones abiertas en este momento.</p>
+                    <p class="text-xs text-slate-500 max-w-lg mx-auto">
+                        En cuanto un administrador abra una votación, aparecerá aquí automáticamente en tiempo real sin necesidad de recargar la página.
+                    </p>
+                </div>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- Sección de Votaciones Cerradas -->
+    <section id="seccion-votaciones-cerradas"
+             class="space-y-4 pt-4 {% if not votaciones_cerradas %}hidden{% endif %}">
+        <div class="flex items-center gap-2.5">
+            <span class="w-3 h-3 rounded-full bg-slate-400"></span>
+            <h2 class="text-xl font-bold text-slate-900">Votaciones Cerradas (Resultados Históricos)</h2>
+            <span id="contador-votaciones-cerradas"
+                  class="bg-slate-200 text-slate-700 text-xs font-bold px-2.5 py-0.5 rounded-full">
+                {{ votaciones_cerradas|length }}
+            </span>
+        </div>
+
+        <div id="contenedor-votaciones-cerradas" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {% for votacion in votaciones_cerradas %}
+                <article class="bg-white rounded-xl border border-slate-200 p-6 flex flex-col justify-between opacity-95">
+                    <div class="space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <span class="insignia-cerrada inline-flex items-center gap-1.5 bg-slate-200 text-slate-700 text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wide">
+                                Cerrada
+                            </span>
+                            <span class="text-xs text-slate-500">
+                                Cerrada: {{ votacion.fecha_cierre|formatear_fecha }}
+                            </span>
+                        </div>
+                        <h3 class="text-lg font-bold text-slate-800">{{ votacion.pregunta }}</h3>
+                        <p class="text-xs text-slate-500">
+                            Total definitivo: <strong class="text-slate-800">{{ votacion.total_votos }} votos</strong> en {{ votacion.total_opciones }} opciones.
+                        </p>
+                    </div>
+                    <div class="mt-5 pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
+                        <a href="{{ url_for('publicas.resultados_votacion', id_votacion=votacion.id) }}"
+                           class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition">
+                            Consultar resultados finales
+                        </a>
+                    </div>
+                </article>
+            {% endfor %}
+        </div>
+    </section>
+
+    <!-- Guía Didáctica de Estructuras Redis Utilizadas -->
+    <section class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-5">
+        <div>
+            <h2 class="text-lg font-bold text-slate-900">¿Cómo interviene Redis en esta aplicación?</h2>
+            <p class="text-sm text-slate-600 mt-1">
+                Cada operación del sistema se apoya en una estructura nativa de Redis seleccionada por su complejidad algorítmica y garantías atómicas:
+            </p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+            <div class="bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-1.5">
+                <span class="font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">HASH</span>
+                <h3 class="font-bold text-slate-900 text-sm">Metadatos y Opciones</h3>
+                <p class="text-slate-600">
+                    Almacena los campos de cada administrador, los metadatos de la votación y el diccionario de opciones mediante
+                    <code>HSET</code>, <code>HGET</code>, <code>HGETALL</code> y <code>HEXISTS</code>.
+                </p>
+            </div>
+            <div class="bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-1.5">
+                <span class="font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">SORTED SET (ZSET)</span>
+                <h3 class="font-bold text-slate-900 text-sm">Conteo y Ranking</h3>
+                <p class="text-slate-600">
+                    Mantiene el índice cronológico de votaciones y el puntaje de cada opción usando
+                    <code>ZADD</code>, <code>ZINCRBY</code>, <code>ZREVRANGE</code> y <code>ZCARD</code>.
+                </p>
+            </div>
+            <div class="bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-1.5">
+                <span class="font-mono font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">SET</span>
+                <h3 class="font-bold text-slate-900 text-sm">Control de Voto Único</h3>
+                <p class="text-slate-600">
+                    Verifica en tiempo constante <code>O(1)</code> si una sesión o administrador ya votó mediante
+                    <code>SISMEMBER</code>, <code>SADD</code> y <code>SCARD</code>.
+                </p>
+            </div>
+            <div class="bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-1.5">
+                <span class="font-mono font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded">LUA + PUB/SUB</span>
+                <h3 class="font-bold text-slate-900 text-sm">Atomicidad y Tiempo Real</h3>
+                <p class="text-slate-600">
+                    El script Lua valida e incrementa sin condiciones de carrera y ejecuta <code>PUBLISH</code> hacia los clientes SSE suscritos con <code>SUBSCRIBE</code>.
+                </p>
+            </div>
+        </div>
+    </section>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/votacion.js') }}"></script>
+{% endblock %}

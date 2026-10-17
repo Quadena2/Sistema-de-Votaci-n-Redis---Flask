@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{% block titulo %}Sistema de Votaciones en Tiempo Real · Redis + Flask{% endblock %}</title>
+    <!-- Tailwind CSS vía CDN (uso académico para prototipado sin Node.js/npm) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos.css') }}">
+</head>
+<body class="min-h-full flex flex-col text-slate-800 antialiased selection:bg-indigo-600 selection:text-white">
+
+    <!-- Encabezado y navegación compartida -->
+    <header class="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-wrap items-center justify-between py-3.5 gap-4">
+                <!-- Logotipo textual de la aplicación -->
+                <div class="flex items-center gap-3">
+                    <a href="{{ url_for('publicas.inicio') }}" class="flex items-center gap-2.5 group">
+                        <span class="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-red-600 text-white font-bold text-lg shadow-sm group-hover:bg-red-500 transition">
+                            R
+                        </span>
+                        <div>
+                            <span class="font-bold text-lg tracking-tight text-white block leading-none">
+                                VotaRedis
+                            </span>
+                            <span class="text-xs text-slate-400 block mt-0.5">
+                                Flask · Redis · Lua · Pub/Sub · SSE
+                            </span>
+                        </div>
+                    </a>
+                </div>
+
+                <!-- Enlaces principales de navegación -->
+                <nav class="flex flex-wrap items-center gap-2 sm:gap-4 text-sm font-medium" aria-label="Navegación principal">
+                    <a href="{{ url_for('publicas.inicio') }}"
+                       class="px-3 py-1.5 rounded-md transition {% if request.endpoint == 'publicas.inicio' and not vista_listado %}bg-slate-800 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800/60{% endif %}">
+                        Inicio
+                    </a>
+                    <a href="{{ url_for('publicas.listar_votaciones') }}"
+                       class="px-3 py-1.5 rounded-md transition {% if request.endpoint == 'publicas.listar_votaciones' or vista_listado %}bg-slate-800 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800/60{% endif %}">
+                        Votaciones
+                    </a>
+
+                    {% if admin_actual %}
+                        <a href="{{ url_for('administracion.panel') }}"
+                           class="px-3 py-1.5 rounded-md transition flex items-center gap-1.5 {% if request.blueprint == 'administracion' %}bg-indigo-600 text-white{% else %}text-indigo-300 hover:text-white hover:bg-slate-800{% endif %}">
+                            <span class="w-2 h-2 rounded-full bg-indigo-400"></span>
+                            Panel de Administración
+                        </a>
+                    {% endif %}
+                </nav>
+
+                <!-- Estado de sesión administrativa o enlaces de acceso -->
+                <div class="flex items-center gap-3 text-sm">
+                    {% if admin_actual %}
+                        <div class="flex items-center gap-3 bg-slate-800/90 border border-slate-700 rounded-lg px-3 py-1.5">
+                            <div class="text-xs">
+                                <span class="text-slate-400 block leading-tight">Administrador</span>
+                                <span class="font-semibold text-emerald-400">{{ admin_actual.nombre_usuario }}</span>
+                            </div>
+                            <form action="{{ url_for('autenticacion.salir') }}" method="POST" class="inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit"
+                                        class="text-xs bg-slate-700 hover:bg-red-600 text-slate-200 hover:text-white px-2.5 py-1 rounded transition font-medium">
+                                    Cerrar sesión
+                                </button>
+                            </form>
+                        </div>
+                    {% else %}
+                        <a href="{{ url_for('autenticacion.ingresar') }}"
+                           class="text-slate-300 hover:text-white px-3 py-1.5 rounded-md hover:bg-slate-800 transition font-medium">
+                            Iniciar sesión
+                        </a>
+                        <a href="{{ url_for('autenticacion.registro') }}"
+                           class="bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-1.5 rounded-md font-medium shadow-sm transition">
+                            Registrar admin
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Mensajes de estado (flash) -->
+    <div class="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+        {% with mensajes = get_flashed_messages(with_categories=true) %}
+            {% if mensajes %}
+                <div class="space-y-2" role="region" aria-label="Notificaciones del sistema">
+                    {% for categoria, texto in mensajes %}
+                        {% if categoria == 'exito' %}
+                            <div class="alerta-estado bg-emerald-50 border-l-4 border-emerald-500 text-emerald-900 px-4 py-3 rounded-r-lg shadow-sm flex items-center justify-between">
+                                <div class="flex items-center gap-2.5 text-sm font-medium">
+                                    <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                                    <span>{{ texto }}</span>
+                                </div>
+                            </div>
+                        {% elif categoria == 'advertencia' %}
+                            <div class="alerta-estado bg-amber-50 border-l-4 border-amber-500 text-amber-900 px-4 py-3 rounded-r-lg shadow-sm flex items-center justify-between">
+                                <div class="flex items-center gap-2.5 text-sm font-medium">
+                                    <span class="inline-block w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                                    <span>{{ texto }}</span>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="alerta-estado bg-red-50 border-l-4 border-red-600 text-red-900 px-4 py-3 rounded-r-lg shadow-sm flex items-center justify-between">
+                                <div class="flex items-center gap-2.5 text-sm font-medium">
+                                    <span class="inline-block w-2.5 h-2.5 rounded-full bg-red-600"></span>
+                                    <span>{{ texto }}</span>
+                                </div>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    <!-- Contenido principal -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {% block contenido %}{% endblock %}
+    </main>
+
+    <!-- Pie de página didáctico -->
+    <footer class="bg-slate-900 text-slate-400 border-t border-slate-800 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs">
+                <div>
+                    <p class="font-semibold text-slate-200">
+                        Proyecto Académico: Sistema de Votaciones en Tiempo Real con Flask y Redis
+                    </p>
+                    <p class="mt-1 text-slate-400">
+                        Arquitectura de 3 capas (Presentación → Negocio → Datos → Redis) · Almacenamiento exclusivo en Redis (`Hashes`, `Sets`, `Sorted Sets`, `Lua`, `Pub/Sub`).
+                    </p>
+                </div>
+                <div class="flex flex-wrap items-center gap-3 bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700">
+                    <span>Prefijo Redis: <code class="text-amber-300 font-mono">{{ prefijo_redis }}:*</code></span>
+                    <span class="text-slate-600">|</span>
+                    <span title="Identificador aleatorio de sesión firmada para control de voto único por sesión">
+                        Sesión votante: <code class="text-indigo-300 font-mono">sesion:{{ id_sesion_votante[:8] }}…</code>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

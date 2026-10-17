@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block titulo %}Resultados en Vivo · {{ votacion.pregunta }}{% endblock %}
+
+{% block contenido %}
+<div id="aplicacion-votacion"
+     data-id-votacion="{{ votacion.id }}"
+     data-url-voto="{{ url_for('publicas.api_registrar_voto', id_votacion=votacion.id) }}"
+     data-url-estado="{{ url_for('publicas.api_obtener_votacion', id_votacion=votacion.id) }}"
+     data-url-eventos="{{ url_for('publicas.api_eventos_votacion', id_votacion=votacion.id) }}"
+     class="space-y-8">
+
+    <!-- Barra superior -->
+    <div class="flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-3 text-sm">
+            <a href="{{ url_for('publicas.detalle_votacion', id_votacion=votacion.id) }}"
+               class="text-indigo-600 hover:text-indigo-500 font-semibold transition">
+                ← Ir a la página de votación
+            </a>
+            <span class="text-slate-300">|</span>
+            <a href="{{ url_for('publicas.listar_votaciones') }}"
+               class="text-slate-600 hover:text-slate-900 transition">
+                Listado general
+            </a>
+        </div>
+
+        <div id="indicador-sse"
+             class="inline-flex items-center gap-2 bg-slate-100 border border-slate-300 text-slate-700 text-xs font-medium px-3.5 py-1.5 rounded-full">
+            <span id="punto-sse" class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+            <span id="texto-sse">Conectando flujo SSE…</span>
+        </div>
+    </div>
+
+    <!-- Tarjeta principal de resultados en vivo -->
+    <section class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-6">
+        <div class="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-5">
+            <div class="space-y-2 max-w-3xl">
+                <div class="flex items-center gap-2.5">
+                    <span id="insignia-estado-votacion"
+                          class="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide
+                          {% if votacion.estado == 'abierta' %}bg-emerald-100 text-emerald-800
+                          {% elif votacion.estado == 'cerrada' %}bg-slate-200 text-slate-700
+                          {% else %}bg-amber-100 text-amber-800{% endif %}">
+                        Estado: <span id="texto-estado-votacion">{{ votacion.estado }}</span>
+                    </span>
+                    <span class="text-xs text-slate-500 font-mono">ID: {{ votacion.id }}</span>
+                </div>
+                <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900">
+                    {{ votacion.pregunta }}
+                </h1>
+            </div>
+
+            <div class="bg-slate-900 text-white rounded-2xl px-5 py-3 text-center shadow-sm">
+                <span class="text-xs text-slate-400 uppercase tracking-wider block">Total de Votos</span>
+                <span id="total-votos" class="text-3xl font-extrabold text-emerald-400">{{ votacion.total_votos }}</span>
+            </div>
+        </div>
+
+        <!-- Barras de progreso y ranking en tiempo real -->
+        <div id="contenedor-resultados" class="space-y-5">
+            {% for item in votacion.resultados %}
+                <div class="item-resultado bg-slate-50/70 border border-slate-200/80 rounded-xl p-4 space-y-2"
+                     data-id-opcion="{{ item.id_opcion }}">
+                    <div class="flex items-center justify-between gap-3">
+                        <div class="flex items-center gap-2.5">
+                            <span class="posicion-opcion inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-800 text-white text-xs font-mono font-bold">
+                                #{{ item.posicion }}
+                            </span>
+                            <span class="texto-opcion font-bold text-slate-900 text-base">{{ item.texto }}</span>
+                        </div>
+                        <div class="text-right font-mono">
+                            <span class="votos-opcion text-lg font-extrabold text-slate-900">{{ item.votos }}</span>
+                            <span class="text-xs text-slate-500">votos</span>
+                            <span class="ml-1.5 inline-block bg-indigo-100 text-indigo-800 text-xs font-bold px-2 py-0.5 rounded">
+                                <span class="porcentaje-opcion">{{ item.porcentaje }}</span>%
+                            </span>
+                        </div>
+                    </div>
+                    <div class="w-full h-3.5 bg-slate-200 rounded-full overflow-hidden">
+                        <div class="barra-opcion h-full bg-indigo-600 rounded-full transition-all duration-500"
+                             style="width: {{ item.porcentaje }}%"></div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+        <div class="pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs text-slate-600">
+            <div>
+                <span class="text-slate-400 block">Creación</span>
+                <strong class="text-slate-800">{{ votacion.fecha_creacion|formatear_fecha }}</strong>
+            </div>
+            <div>
+                <span class="text-slate-400 block">Apertura</span>
+                <strong id="fecha-apertura-votacion" class="text-slate-800">{{ votacion.fecha_apertura|formatear_fecha }}</strong>
+            </div>
+            <div>
+                <span class="text-slate-400 block">Cierre</span>
+                <strong id="fecha-cierre-votacion" class="text-slate-800">{{ votacion.fecha_cierre|formatear_fecha }}</strong>
+            </div>
+        </div>
+    </section>
+
+    <!-- Comandos redis-cli equivalentes para demostrar en consola -->
+    <section class="bg-slate-900 text-slate-200 rounded-2xl p-6 shadow-md border border-slate-800 space-y-4">
+        <h2 class="text-base font-bold text-white">
+            Comandos <code class="text-amber-300 font-mono">redis-cli</code> para verificar esta votación en vivo
+        </h2>
+        <div class="bg-slate-950 rounded-xl p-4 font-mono text-xs text-slate-300 space-y-1.5 overflow-x-auto border border-slate-800">
+            <p class="text-slate-500"># 1. Consultar metadatos y estado (Hash)</p>
+            <p class="text-emerald-300">HGETALL {{ votacion.estructuras_redis.datos.clave }}</p>
+            <p class="text-slate-500 pt-2"># 2. Consultar diccionario de opciones (Hash)</p>
+            <p class="text-emerald-300">HGETALL {{ votacion.estructuras_redis.opciones.clave }}</p>
+            <p class="text-slate-500 pt-2"># 3. Consultar resultados ordenados de mayor a menor (Sorted Set)</p>
+            <p class="text-emerald-300">ZREVRANGE {{ votacion.estructuras_redis.resultados.clave }} 0 -1 WITHSCORES</p>
+            <p class="text-slate-500 pt-2"># 4. Contar identidades registradas en el Set de votantes</p>
+            <p class="text-emerald-300">SCARD {{ votacion.estructuras_redis.votantes.clave }}</p>
+        </div>
+    </section>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/votacion.js') }}"></script>
+{% endblock %}

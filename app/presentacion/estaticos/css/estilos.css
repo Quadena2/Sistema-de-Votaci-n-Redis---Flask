@@ -1,0 +1,50 @@
+/* ==========================================================================
+   Estilos complementarios propios (estilos.css)
+   Complementa a Tailwind CSS (cargado vía CDN con fines académicos)
+   ========================================================================== */
+
+:root {
+    --transicion-suave: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Transición fluida en barras de porcentaje en tiempo real */
+.barra-opcion {
+    transition: width 0.45s var(--transicion-suave), background-color 0.3s ease;
+}
+
+/* Resaltado visual cuando se selecciona una opción en el formulario de voto */
+.opcion-votacion:has(input[type="radio"]:checked) {
+    border-color: #4f46e5;
+    background-color: rgba(238, 242, 255, 0.75);
+    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.15);
+}
+
+/* Efecto de destello sutil cuando llega un evento SSE en tiempo real */
+@keyframes destelloActualizacion {
+    0% {
+        background-color: rgba(16, 185, 129, 0.14);
+    }
+    100% {
+        background-color: transparent;
+    }
+}
+
+.actualizado-reciente {
+    animation: destelloActualizacion 1.1s ease-out;
+}
+
+/* Animación de entrada para mensajes de estado */
+@keyframes entradaSuave {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.alerta-estado {
+    animation: entradaSuave 0.25s ease-out;
+}

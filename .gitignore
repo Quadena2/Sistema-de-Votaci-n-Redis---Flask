@@ -1,0 +1,22 @@
+# Entornos virtuales de Python
+venv/
+.venv/
+env/
+
+# Archivos de configuración con secretos locales
+.env
+.env.local
+
+# Caché de Python y pruebas
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Archivos del sistema operativo e IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

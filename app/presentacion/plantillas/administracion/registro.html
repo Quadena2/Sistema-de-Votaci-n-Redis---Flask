@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block titulo %}Registro de Administrador · VotaRedis{% endblock %}
+
+{% block contenido %}
+<div class="max-w-lg mx-auto">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
+        <div class="space-y-1.5 border-b border-slate-100 pb-4">
+            <span class="inline-block bg-indigo-50 text-indigo-700 text-xs font-bold px-2.5 py-1 rounded-md uppercase tracking-wide">
+                Seguridad Administrativa
+            </span>
+            <h1 class="text-2xl font-extrabold text-slate-900">Registrar Cuenta de Administrador</h1>
+            <p class="text-xs text-slate-500">
+                El registro está protegido mediante código de invitación en el servidor y utiliza el script atómico
+                <code class="font-mono text-indigo-600">registrar_administrador.lua</code> en Redis.
+            </p>
+        </div>
+
+        <form action="{{ url_for('autenticacion.registro') }}" method="POST" class="space-y-4" novalidate>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div>
+                <label for="nombre_usuario" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Nombre de usuario
+                </label>
+                <input type="text"
+                       id="nombre_usuario"
+                       name="nombre_usuario"
+                       value="{{ valores_previos.get('nombre_usuario', '') }}"
+                       required
+                       minlength="3"
+                       maxlength="30"
+                       autocomplete="username"
+                       placeholder="Ej. admin_docente"
+                       class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/20 outline-none transition">
+                <p class="text-[11px] text-slate-500 mt-1">
+                    Entre 3 y 30 caracteres (letras, números, puntos, guiones o guiones bajos).
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label for="contrasena" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Contraseña
+                    </label>
+                    <input type="password"
+                           id="contrasena"
+                           name="contrasena"
+                           required
+                           minlength="8"
+                           autocomplete="new-password"
+                           placeholder="Mínimo 8 caracteres"
+                           class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/20 outline-none transition">
+                </div>
+
+                <div>
+                    <label for="confirmacion_contrasena" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Confirmar contraseña
+                    </label>
+                    <input type="password"
+                           id="confirmacion_contrasena"
+                           name="confirmacion_contrasena"
+                           required
+                           minlength="8"
+                           autocomplete="new-password"
+                           placeholder="Repite la contraseña"
+                           class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/20 outline-none transition">
+                </div>
+            </div>
+
+            <div>
+                <label for="codigo_invitacion" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Código de invitación de administrador
+                </label>
+                <input type="password"
+                       id="codigo_invitacion"
+                       name="codigo_invitacion"
+                       required
+                       autocomplete="off"
+                       placeholder="Código configurado en .env (CODIGO_INVITACION_ADMIN)"
+                       class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/20 outline-none transition">
+                <p class="text-[11px] text-slate-500 mt-1">
+                    Validado en el servidor mediante comparación segura en tiempo constante.
+                </p>
+            </div>
+
+            <div class="pt-2">
+                <button type="submit"
+                        class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 px-4 rounded-xl text-sm shadow-sm transition">
+                    Crear cuenta administrativa
+                </button>
+            </div>
+        </form>
+
+        <div class="pt-4 border-t border-slate-100 text-center text-xs text-slate-600">
+            ¿Ya tienes una cuenta de administrador?
+            <a href="{{ url_for('autenticacion.ingresar') }}" class="text-indigo-600 font-semibold hover:underline ml-1">
+                Inicia sesión aquí
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

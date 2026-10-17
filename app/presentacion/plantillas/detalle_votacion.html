@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block titulo %}{{ votacion.pregunta }} · VotaRedis{% endblock %}
+
+{% block contenido %}
+<div id="aplicacion-votacion"
+     data-id-votacion="{{ votacion.id }}"
+     data-url-voto="{{ url_for('publicas.api_registrar_voto', id_votacion=votacion.id) }}"
+     data-url-estado="{{ url_for('publicas.api_obtener_votacion', id_votacion=votacion.id) }}"
+     data-url-eventos="{{ url_for('publicas.api_eventos_votacion', id_votacion=votacion.id) }}"
+     class="space-y-8">
+
+    <!-- Migas de pan y barra superior de estado -->
+    <div class="flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-2 text-sm text-slate-600">
+            <a href="{{ url_for('publicas.listar_votaciones') }}" class="hover:text-indigo-600 font-medium transition">
+                ← Volver a votaciones
+            </a>
+            <span>/</span>
+            <span class="text-slate-400 font-mono text-xs">{{ votacion.id[:12] }}…</span>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3">
+            <!-- Indicador de conexión SSE en tiempo real -->
+            <div id="indicador-sse"
+                 class="inline-flex items-center gap-2 bg-slate-100 border border-slate-300 text-slate-700 text-xs font-medium px-3 py-1.5 rounded-full">
+                <span id="punto-sse" class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+                <span id="texto-sse">Conectando flujo SSE…</span>
+            </div>
+
+            <a href="{{ url_for('publicas.resultados_votacion', id_votacion=votacion.id) }}"
+               class="text-xs font-semibold bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded-lg transition shadow-sm">
+                Abrir vista dedicada de resultados
+            </a>
+        </div>
+    </div>
+
+    <!-- Cabecera de la votación -->
+    <section class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <span id="insignia-estado-votacion"
+                  class="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide
+                  {% if votacion.estado == 'abierta' %}bg-emerald-100 text-emerald-800
+                  {% elif votacion.estado == 'cerrada' %}bg-slate-200 text-slate-700
+                  {% else %}bg-amber-100 text-amber-800{% endif %}">
+                Estado: <span id="texto-estado-votacion">{{ votacion.estado }}</span>
+            </span>
+
+            <div class="text-xs text-slate-500 flex flex-wrap gap-4">
+                <span>Creada: <strong>{{ votacion.fecha_creacion|formatear_fecha }}</strong></span>
+                <span id="contenedor-fecha-apertura" class="{% if not votacion.fecha_apertura %}hidden{% endif %}">
+                    Abierta: <strong id="fecha-apertura-votacion">{{ votacion.fecha_apertura|formatear_fecha }}</strong>
+                </span>
+                <span id="contenedor-fecha-cierre" class="{% if not votacion.fecha_cierre %}hidden{% endif %}">
+                    Cerrada: <strong id="fecha-cierre-votacion">{{ votacion.fecha_cierre|formatear_fecha }}</strong>
+                </span>
+            </div>
+        </div>
+
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 leading-tight">
+            {{ votacion.pregunta }}
+        </h1>
+
+        {% if admin_actual %}
+            <div class="bg-indigo-50/80 border border-indigo-200 text-indigo-900 rounded-xl px-4 py-3 text-xs flex flex-wrap items-center justify-between gap-2">
+                <div>
+                    <strong>Modo participación de administrador:</strong> Estás autenticado como
+                    <code class="font-mono font-bold">{{ admin_actual.nombre_usuario }}</code>. Tu voto se procesará con el mismo
+                    servicio y script Lua público, registrando tanto tu sesión actual como tu cuenta
+                    <code class="font-mono">administrador:{{ admin_actual.id[:8] }}…</code>.
+                </div>
+                <a href="{{ url_for('administracion.panel') }}" class="text-indigo-700 hover:underline font-semibold">
+                    Ir al panel →
+                </a>
+            </div>
+        {% endif %}
+    </section>
+
+    <!-- Mensajes dinámicos de validación / respuesta de voto -->
+    <div id="alerta-votacion" class="hidden rounded-xl px-4 py-3.5 text-sm font-medium border shadow-sm" role="alert"></div>
+
+    <!-- Diseño de dos columnas: Formulario de Votación y Resultados en Tiempo Real -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+
+        <!-- Columna izquierda: Emitir voto -->
+        <section class="lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-5">
+            <div class="border-b border-slate-100 pb-3">
+                <h2 class="text-lg font-bold text-slate-900">1. Emitir tu voto</h2>
+                <p class="text-xs text-slate-500 mt-0.5">
+                    Selecciona una opción. El script Lua verificará atómicamente en Redis que la votación esté abierta y que no hayas votado antes.
+                </p>
+            </div>
+
+            <div id="aviso-participacion"
+                 class="{% if votacion.participacion.puede_votar %}hidden{% endif %} bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-4 text-xs font-medium">
+                <span id="texto-motivo-bloqueo">{{ votacion.participacion.motivo_bloqueo }}</span>
+            </div>
+
+            <form id="formulario-votacion"
+                  action="{{ url_for('publicas.api_registrar_voto', id_votacion=votacion.id) }}"
+                  method="POST"
+                  class="space-y-4">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <fieldset id="grupo-opciones" class="space-y-2.5" {% if not votacion.participacion.puede_votar %}disabled{% endif %}>
+                    <legend class="sr-only">Opciones de la votación</legend>
+                    {% for opcion in votacion.opciones %}
+                        <label for="radio-{{ opcion.id_opcion }}"
+                               class="opcion-votacion flex items-start gap-3 p-3.5 rounded-xl border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/30 cursor-pointer transition">
+                            <input type="radio"
+                                   id="radio-{{ opcion.id_opcion }}"
+                                   name="id_opcion"
+                                   value="{{ opcion.id_opcion }}"
+                                   required
+                                   class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300">
+                            <span class="text-sm font-medium text-slate-800 leading-snug flex-1">
+                                {{ opcion.texto }}
+                            </span>
+                        </label>
+                    {% endfor %}
+                </fieldset>
+
+                <button type="submit"
+                        id="boton-votar"
+                        {% if not votacion.participacion.puede_votar %}disabled{% endif %}
+                        class="w-full py-3 px-4 rounded-xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed shadow-sm transition">
+                    {% if votacion.participacion.ya_voto %}
+                        Voto ya registrado en esta votación
+                    {% elif votacion.estado != 'abierta' %}
+                        Votación no disponible para votar
+                    {% else %}
+                        Registrar voto en Redis
+                    {% endif %}
+                </button>
+            </form>
+        </section>
+
+        <!-- Columna derecha: Resultados en tiempo real -->
+        <section class="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-5">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-900">2. Resultados en Tiempo Real</h2>
+                    <p class="text-xs text-slate-500 mt-0.5">
+                        Ordenados de mayor a menor puntuación mediante <code class="font-mono text-indigo-600">ZREVRANGE … WITHSCORES</code>.
+                    </p>
+                </div>
+                <div class="bg-slate-900 text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2">
+                    <span>Total de votos:</span>
+                    <span id="total-votos" class="text-base font-extrabold text-emerald-400">{{ votacion.total_votos }}</span>
+                </div>
+            </div>
+
+            <div id="contenedor-resultados" class="space-y-4">
+                {% for item in votacion.resultados %}
+                    <div class="item-resultado space-y-1.5" data-id-opcion="{{ item.id_opcion }}">
+                        <div class="flex items-center justify-between text-sm gap-2">
+                            <span class="font-semibold text-slate-800 flex items-center gap-2">
+                                <span class="posicion-opcion text-xs font-mono bg-slate-100 text-slate-600 px-2 py-0.5 rounded">#{{ item.posicion }}</span>
+                                <span class="texto-opcion">{{ item.texto }}</span>
+                            </span>
+                            <span class="text-xs font-mono font-bold text-slate-700 whitespace-nowrap">
+                                <span class="votos-opcion">{{ item.votos }}</span> votos
+                                (<span class="porcentaje-opcion text-indigo-600">{{ item.porcentaje }}</span>%)
+                            </span>
+                        </div>
+                        <div class="w-full h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200/60">
+                            <div class="barra-opcion h-full bg-indigo-600 rounded-full transition-all duration-500"
+                                 style="width: {{ item.porcentaje }}%"></div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+
+            <div class="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between text-xs text-slate-500 gap-2">
+                <span>
+                    Identidades registradas en Set (<code class="font-mono">SCARD</code>):
+                    <strong id="total-identidades" class="text-slate-700">{{ votacion.total_identidades_registradas }}</strong>
+                </span>
+                <span>
+                    Opciones en Sorted Set (<code class="font-mono">ZCARD</code>):
+                    <strong class="text-slate-700">{{ votacion.total_opciones }}</strong>
+                </span>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- Inspector didáctico de claves y operaciones Redis de esta votación -->
+    <section class="bg-slate-900 text-slate-200 rounded-2xl p-6 shadow-md border border-slate-800 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+                <h2 class="text-base font-bold text-white flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+                    Inspector Didáctico de Estructuras Redis para esta Votación
+                </h2>
+                <p class="text-xs text-slate-400 mt-0.5">
+                    Claves reales almacenadas en Redis y comandos utilizados por la capa de datos (`RepositorioVotaciones`).
+                </p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+            {% for nombre, info in votacion.estructuras_redis.items() %}
+                <div class="bg-slate-800/90 border border-slate-700 rounded-xl p-3.5 space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <span class="font-semibold text-slate-300 uppercase tracking-wider text-[11px]">{{ nombre }}</span>
+                        <span class="bg-red-500/20 text-red-300 border border-red-500/30 px-2 py-0.5 rounded font-mono text-[11px]">
+                            {{ info.tipo }}
+                        </span>
+                    </div>
+                    <p class="font-mono text-amber-300 break-all text-xs">
+                        {{ info.clave or info.canal }}
+                    </p>
+                    <p class="text-slate-400 text-[11px]">
+                        Comandos: <code class="text-indigo-300">{{ info.comandos|join(', ') }}</code>
+                    </p>
+                </div>
+            {% endfor %}
+        </div>
+    </section>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/votacion.js') }}"></script>
+{% endblock %}
